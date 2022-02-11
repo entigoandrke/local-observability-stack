@@ -1,0 +1,97 @@
+---
+- name: Get additional grafana Org.
+  uri:
+    url: http://grafana:3000/api/orgs
+    user: "{{ GRAFANA_ADMIN_USER }}"
+    password: "{{ GRAFANA_ADMIN_PASSWORD }}"
+    method: GET
+    force_basic_auth: yes
+    return_content: yes
+  register: _registerd_orgs
+
+- name: Set org name fact
+  set_fact:
+    org_name: "{{ GRAFANA_ORG_NAME }}"
+
+- name: "{{ GRAFANA_ORG_NAME }} is registred"
+  set_fact:
+      org_is_registred: true
+  loop: "{{ _registerd_orgs.json }}"
+  when: item.name == org_name
+
+- name: Registration block
+  block:
+  - name: Create additional grafana Org.
+    uri:
+       url: http://grafana:3000/api/orgs
+       user: "{{ GRAFANA_ADMIN_USER }}"
+       password: "{{ GRAFANA_ADMIN_PASSWORD }}"
+       method: POST
+       body: { "name": "{{ GRAFANA_ORG_NAME }}" }
+       force_basic_auth: yes
+       body_format: json
+    register: _result
+
+  - name: Create dashboards directory if it does not exist
+    file:
+      path: /etc/grafana/provisioning/dashboards
+      state: directory
+      mode: '0755'
+
+  - name: "Update Grafana dashboard"
+    template:
+      src: "{{role_path}}/templates/dashboard.j2"
+      dest: "/etc/grafana/provisioning/dashboards/dashboard.yml"
+    when: _result.status == 200
+
+  - name: Create datasources directory if it does not exist
+    ansible.builtin.file:
+      path: /etc/grafana/provisioning/datasources/
+      state: directory
+      mode: '0755'
+
+  - name: "Update Grafana datasource"
+    template:
+      src: "{{role_path}}/templates/datasource.j2"
+      dest: "/etc/grafana/provisioning/datasources/datasource.yml"
+    when: _result.status == 200
+
+  - name: "Lookup dashboards"
+    find:
+      recurse: yes
+      patterns:
+        - "*.json"
+      paths: "{{ role_path }}/files/dashboards"
+    register: found_dashboards
+
+  - name: Copy dashboard files
+    shell: |
+      cp  "{{ item.path }}" /etc/grafana/dashboards
+    with_items: "{{ found_dashboards.files }}"
+    when:  _result.status == 200
+    register: out
+
+  - debug:
+      msg: out.stdout
+
+  - name: Reload dashboards
+    uri:
+      url: http://grafana:3000/api/admin/provisioning/dashboards/reload
+      user: "{{ GRAFANA_ADMIN_USER }}"
+      password: "{{ GRAFANA_ADMIN_PASSWORD }}"
+      method: POST
+      force_basic_auth: yes
+      body_format: json
+    when: _result.status == 200
+
+  - name: Reload datasources
+    uri:
+      url: http://grafana:3000/api/admin/provisioning/datasources/reload
+      user: "{{ GRAFANA_ADMIN_USER }}"
+      password: "{{ GRAFANA_ADMIN_PASSWORD }}"
+      method: POST
+      force_basic_auth: yes
+      body_format: json
+    when: _result.status == 200
+  when: org_is_registred is not defined
+

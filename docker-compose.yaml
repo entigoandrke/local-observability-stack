@@ -1,0 +1,149 @@
+version: '3.7'
+
+volumes:
+  prometheus_data: {}
+  grafana_data: {}
+  grafana_dashboards: {}
+  grafana_provision: {}
+
+networks:
+  monitoring-net:
+
+services:
+  prometheus:
+    image: prom/prometheus:v2.1.0
+    container_name: prometheus
+    volumes:
+      - ./prometheus/:/etc/prometheus/
+      - prometheus_data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.console.libraries=/usr/share/prometheus/console_libraries'
+      - '--web.console.templates=/usr/share/prometheus/consoles'
+    ports:
+      - 9090:9090
+    links:
+      - cadvisor
+      - alertmanager
+      - app
+    depends_on:
+      - cadvisor
+      - app
+    networks:
+      - monitoring-net
+    restart: always
+    healthcheck:
+      test: [ "CMD", "curl", "-f", "http://localhost:9090" ]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+
+  cadvisor:
+    image: gcr.io/cadvisor/cadvisor
+    container_name: cadvisor
+    volumes:
+      - /:/rootfs:ro
+      - /var/run:/var/run:rw
+      - /sys:/sys:ro
+      - /var/lib/docker/:/var/lib/docker:ro
+    ports:
+      - 8080:8080
+    networks:
+      - monitoring-net
+    restart: always
+
+  node-exporter:
+    image: prom/node-exporter
+    container_name: node-exporter
+    volumes:
+      - /proc:/host/proc:ro
+      - /sys:/host/sys:ro
+      - /:/rootfs:ro
+    command:
+      - '--path.procfs=/host/proc'
+      - '--path.sysfs=/host/sys'
+      - --collector.filesystem.ignored-mount-points
+      - "^/(sys|proc|dev|host|etc|rootfs/var/lib/docker/containers|rootfs/var/lib/docker/overlay2|rootfs/run/docker/netns|rootfs/var/lib/docker/aufs)($$|/)"
+    ports:
+      - 9100:9100
+    networks:
+      - monitoring-net
+    restart: always
+
+  alertmanager:
+    image: prom/alertmanager
+    container_name: alertmanager
+    ports:
+      - 9093:9093
+    volumes:
+      - ./alertmanager/:/etc/alertmanager/
+    networks:
+      - monitoring-net
+    restart: always
+    command:
+      - '--config.file=/etc/alertmanager/config.yml'
+      - '--storage.path=/alertmanager'
+
+  grafana:
+    image: grafana/grafana
+    container_name: grafana
+    user: "472"
+    depends_on:
+      - prometheus
+    env_file:
+      - ./.env
+    environment:
+      - GF_SECURITY_ADMIN_USER=${GRAFANA_ADMIN_USER:-admin}
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_ADMIN_PASSWORD:-super}
+      - GF_USERS_ALLOW_SIGN_UP=false
+      - GF_AUTH_ANONYMOUS_ENABLED=true
+      - GF_AUTH_ANONYMOUS_ORG_NAME=${GRAFANA_ORG_NAME:-Local}
+      - GF_AUTH_ANONYMOUS_ORG_ROLE=Viewer
+    ports:
+      - 3000:3000
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - grafana_dashboards:/etc/grafana/dashboards
+      - grafana_provision:/etc/grafana/provisioning
+    networks:
+      - monitoring-net
+    restart: always
+    healthcheck:
+      test: [ "CMD", "curl", "-f", "http://localhost:3000" ]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+  app:
+    build:
+      context: demo-app/
+    image: app
+    container_name: app
+    ports:
+      - 9101:9101
+    environment:
+      - POLLING_INTERVAL_SECONDS=${POLLING_INTERVAL_SECONDS:-30}
+      - EXPORTER_PORT=${EXPORTER_PORT:-9100}
+      - EMHI_STATION=${EMHI_STATION:-Tallinn-Harku}
+    networks:
+      - monitoring-net
+    restart: always
+  init:
+    build:
+      context: grafana-init/
+    image: init
+    container_name: init
+    depends_on:
+      - grafana
+    env_file:
+      - ./.env
+    environment:
+      - GRAFANA_ADMIN_PASSWORD=${GRAFANA_ADMIN_PASSWORD:-super}
+      - GRAFANA_ADMIN_USER=${GRAFANA_ADMIN_USER:-admin}
+      - GRAFANA_ORG_NAME=${GRAFANA_ORG_NAME:-Local}
+    volumes:
+      - grafana_dashboards:/etc/grafana/dashboards
+      - grafana_provision:/etc/grafana/provisioning
+    networks:
+      - monitoring-net
+    restart: always

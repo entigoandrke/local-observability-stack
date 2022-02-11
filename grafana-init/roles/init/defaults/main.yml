@@ -1,0 +1,3 @@
+GRAFANA_ADMIN_PASSWORD: "{{ lookup('env', 'GRAFANA_ADMIN_PASSWORD') | default('super', True) }}"
+GRAFANA_ADMIN_USER: "{{ lookup('env', 'GRAFANA_ADMIN_USER') | default('admin', True) }}"
+GRAFANA_ORG_NAME: "{{ lookup('env', 'GRAFANA_ORG_NAME') | default('Local', True) }}"
