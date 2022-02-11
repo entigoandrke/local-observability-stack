@@ -1,5 +1,9 @@
 """Application exporter"""
 # ref https://trstringer.com/quick-and-easy-prometheus-exporter/
+# Author: Andres Kepler <andres.kepler@entigo.com>
+# Date: 11.02.2022
+# This app demonstrates prometheus exporter by fetching Estonian Wheather Stations data.
+
 import os
 import time
 from prometheus_client import start_http_server, Gauge, Enum

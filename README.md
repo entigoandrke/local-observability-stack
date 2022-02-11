@@ -1,5 +1,7 @@
 # Local Observability Stack
+
 Author: Andres Kepler <andres.kepler@entigo.com>
+
 Date: 11.02.2022
 
 
