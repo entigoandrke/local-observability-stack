@@ -1,0 +1,14 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: demo-app
+  labels:
+    app: demo-app
+spec:
+  ports:
+    - port: 9101
+      protocol: TCP
+      name: grpc
+      targetPort: 9101
+  selector:
+    app: demo-app

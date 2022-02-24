@@ -1,0 +1,57 @@
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: demo-app
+  namespace: default
+  labels:
+    app: demo-app
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: demo-app
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 50%
+      maxSurge: 1
+  template:
+    metadata:
+      labels:
+        app: demo-app
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/path: "/metrics"
+        prometheus.io/port: "9091"
+    spec:
+      terminationGracePeriodSeconds: 30
+      containers:
+      - name: demo-app
+        image: harbor.fleetcomplete.dev/fcplus/demo-app:latest
+        imagePullPolicy: IfNotPresent
+
+        env:
+          - name: POLLING_INTERVAL_SECONDS
+            value: 30
+          - name: EXPORTER_PORT
+            value: 9101
+          - name: DEBUG
+            value: "true"
+
+        livenessProbe:
+          httpGet:
+            path: /healthz
+            port: 9101
+        readinessProbe:
+          httpGet:
+            path: /healthz
+            port: 9101
+
+        resources:
+          limits:
+            cpu: 10m
+            memory: 30Mi
+          requests:
+            cpu: 10m
+            memory: 30Mi

@@ -3,3 +3,4 @@ lxml
 html5lib
 prometheus_client
 requests
+flask
